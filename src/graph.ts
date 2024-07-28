@@ -224,6 +224,8 @@ export function randomTreeGraph(
   assert(_expectedValue(child_probs) < 1 || max_depth !== undefined);
   assert(max_depth === undefined || max_depth >= 0);
 
+  console.log(child_probs);
+
   const graph = new Graph();
   const q = new Queue<[string, number]>();
 
@@ -270,7 +272,7 @@ export function randomForestGraph(
   relation: string,
   max_depth?: number,
   naming_fn: (idx: number) => string = idx_naming,
-) {
+): Graph {
   const base_graph: Graph = new Graph();
   const tree_count: number = sampleFromDistribution(tree_count_probs);
   for (var i = 0; i < tree_count; i++) {

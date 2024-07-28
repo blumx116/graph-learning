@@ -1,6 +1,8 @@
 import * as tf from "@tensorflow/tfjs";
 import { Graph, graphFromPredicates, addInverseRelation } from "./graph";
 
+export const N_EPOCHS: number = 1000;
+
 function printParameterDistribution(model: tf.LayersModel) {
   model.layers.forEach((layer, index) => {
     if (layer.getWeights().length > 0) {
@@ -30,7 +32,7 @@ function printDistributionStats(values: any) {
   console.log(`    Max: ${max.toFixed(6)}`);
 }
 
-function makeMLPPredicateModel(
+export function makeMLPPredicateModel(
   relation_vocab: number,
   node_vocab: number,
   hidden: number,
@@ -39,14 +41,18 @@ function makeMLPPredicateModel(
   dropout: number = 0,
   learning_rate: number = 3e-4,
 ): tf.LayersModel {
+  // TODO: handle edge cases around graph
   const model = tf.sequential();
+
+  const relation_dim: number = relation_vocab > 1 ? relation_vocab : 0;
+  // we don't input relation type to the model if there is only one type of relation
 
   for (var i = 0; i < n_layers; i++) {
     model.add(
       tf.layers.dense({
         units: hidden,
         activation: "relu",
-        inputShape: i == 0 ? [relation_vocab + node_vocab] : [hidden],
+        inputShape: i == 0 ? [relation_dim + node_vocab] : [hidden],
         kernelRegularizer: tf.regularizers.l2({ l2: l2_regularization }),
         biasRegularizer: tf.regularizers.l2({ l2: l2_regularization }),
         kernelInitializer: tf.initializers.glorotNormal({ seed: 777 }),
@@ -72,7 +78,6 @@ function makeMLPPredicateModel(
 
   return model;
 }
-
 function lossOnIdx(
   model: tf.LayersModel,
   dataset: DataSet,
@@ -96,11 +101,15 @@ function lossOnIdx(
 }
 
 // Training loop
-async function trainModel(model: tf.LayersModel, dataset: TrainTestDataset) {
+export async function trainModel(
+  model: tf.LayersModel,
+  dataset: TrainTestDataset,
+  callback: (epoch: number) => void,
+) {
   dataset.train.xs.print();
   dataset.train.ys.print();
   printParameterDistribution(model);
-  for (let epoch = 0; epoch < 1000; epoch++) {
+  for (let epoch = 0; epoch < N_EPOCHS; epoch++) {
     const history = await model.fit(dataset.train.xs, dataset.train.ys, {
       epochs: 1,
       batchSize: dataset.train.xs.shape[0],
@@ -110,6 +119,7 @@ async function trainModel(model: tf.LayersModel, dataset: TrainTestDataset) {
     console.log(
       `Epoch ${epoch + 1}: loss = ${history.history.loss[0]}, val_loss = ${history.history.val_loss[0]}`,
     );
+    callback(epoch);
   }
 
   for (var i = 0; i < dataset.train.xs.shape[0]; i++) {
@@ -150,7 +160,7 @@ function indexify<T>(values: Iterable<T>): Map<T, number> {
  * @returns {dataset}: tensor encodings for a task prediction 'to' node from
  * 	'relation' and 'from' node
  */
-function graphToTFJSData(graph: Graph): DataSet {
+export function graphToTFJSData(graph: Graph): DataSet {
   // TODO: this function is very close to just being 3 calls to
   // categoricalToOneHot(edges, feature_fn), it would be nice to find an elegant
   // way to do that
@@ -163,14 +173,6 @@ function graphToTFJSData(graph: Graph): DataSet {
     Array.from(graph.edges).map((edge) => edge_types.get(edge.relation)!),
   );
 
-  const edge_tensor: tf.Tensor = tf.oneHot(
-    tf
-      .tensor(
-        Array.from(graph.edges).map((edge) => edge_types.get(edge.relation)!),
-      )
-      .toInt(),
-    edge_types.size,
-  );
   const from_node_tensor: tf.Tensor = tf.oneHot(
     tf
       .tensor(
@@ -179,6 +181,19 @@ function graphToTFJSData(graph: Graph): DataSet {
       .toInt(),
     node_idxs.size,
   );
+  var xs: tf.Tensor = from_node_tensor;
+
+  if (edge_types.size > 1) {
+    const edge_tensor: tf.Tensor = tf.oneHot(
+      tf
+        .tensor(
+          Array.from(graph.edges).map((edge) => edge_types.get(edge.relation)!),
+        )
+        .toInt(),
+      edge_types.size,
+    );
+    xs = tf.concat([edge_tensor, xs], 1);
+  }
   const to_node_tensor: tf.Tensor = tf.oneHot(
     tf
       .tensor(
@@ -189,7 +204,7 @@ function graphToTFJSData(graph: Graph): DataSet {
   );
 
   return {
-    xs: tf.concat([edge_tensor, from_node_tensor], 1),
+    xs,
     ys: to_node_tensor,
   };
 }
@@ -204,15 +219,32 @@ async function maskDataset(
   };
 }
 
-async function trainTestSplit(
+export async function trainTestSplit(
   dataset: DataSet,
   ratio: number,
 ): Promise<TrainTestDataset> {
   const n_samples: number = dataset.xs.shape[0];
-  const inTrainSet: boolean[] = Array(n_samples).map(
-    (_) => Math.random() < ratio,
+
+  if (n_samples == 0) {
+    alert(
+      "We currently don't support single-node graphs. Please add additional nodes",
+    );
+  }
+
+  const inTrainSet: boolean[] = Array.from(
+    { length: n_samples },
+    () => Math.random() < ratio,
   );
+
+  // hacky bit of logic to ensure that we never get everything in the test or train set
+  const allEqual: boolean = inTrainSet.every((value) => value == inTrainSet[0]);
+  if (allEqual) {
+    return await trainTestSplit(dataset, ratio);
+  }
+
   const inTestSet: boolean[] = inTrainSet.map((x) => !x);
+
+  console.log(inTrainSet);
 
   return {
     train: await maskDataset(dataset, inTrainSet),
@@ -221,21 +253,15 @@ async function trainTestSplit(
   };
 }
 
-const g = addInverseRelation(
-  graphFromPredicates("0 < 1", "1 < 2", "2 < 3", "2 < 4"),
-  "<",
-  ">",
-);
+export async function computeCorrectProbs(
+  model: tf.LayersModel,
+  dataset: DataSet,
+): Promise<number[]> {
+  const unnormed_logits: tf.Tensor = model.apply(dataset.xs) as tf.Tensor;
+  const probs: tf.Tensor = tf.softmax(unnormed_logits, 1);
 
-trainTestSplit(graphToTFJSData(g), 0.7).then((dataset) => {
-  const model = makeMLPPredicateModel(
-    g.relationTypes().size,
-    g.nodes.size,
-    1024,
-    1, // layers
-    0.0, // l2
-    0.0, // dropout
-    1e-4, //learning rate
-  );
-  trainModel(model, dataset);
-});
+  console.log({ probs, dataset });
+
+  // TODO: this is a poor man's implementation of gather_nd because it's not on tfjs
+  return (await tf.mul(probs, dataset.ys).max(1).array()) as number[];
+}

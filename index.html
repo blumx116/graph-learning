@@ -7,6 +7,7 @@
     <style>
       body,
       html {
+		color: black;
         margin: 0;
         padding: 0;
         font-family: Arial, sans-serif;
@@ -28,20 +29,21 @@
       }
       .form-part-1 {
         background-color: #f0f0f0;
-        height: 50%;
+        height: 30%;
         overflow-y: auto;
       }
       .form-part-2 {
         background-color: #e0e0e0;
-        height: 35%;
+        height: 60%;
         overflow-y: auto;
       }
       .form-part-3 {
         background-color: #d0d0d0;
-        height: 15%;
+        height: 10%;
         display: flex;
         justify-content: center;
         align-items: center;
+		flex-direction: column;
       }
       .right-section {
         width: 70%;
@@ -62,34 +64,67 @@
         width: 100%;
         margin-bottom: 10px;
       }
-      button {
+      #submit {
         width: 100%;
-        height: 100%;
+        height: 65%;
         font-size: 16px;
         cursor: pointer;
         border: none;
         background-color: #4caf50;
         color: white;
       }
+	  .training-bar {
+			  width: 100%;
+			  height: 35%;
+	  }
     </style>
   </head>
   <body>
     <div class="container">
       <div class="form-section">
         <div class="form-part form-part-1">
-          <h3>Form Part 1</h3>
-          <input type="range" min="0" max="100" />
-          <input type="range" min="0" max="100" />
+          <h3>Graph Definition</h3>
+		  <input type="checkbox" checked id="use-freeform-input">Manual Input?</input>
           <textarea id="freeform-graph" rows="8">1 < 2&#10;2 < 3 </textarea>
+		  <div id="auto-generate">
+				  <h4>Child Distribution</h4>
+				  <input type="text" value="{ 0.5: 0, 0.3: 1, 0.2: 2}" id="child-distribution"></input>
+
+				  <h4>Max Depth</h4>
+				<input type="range" value="2" min="2" max="10" step="1" id="max-depth" oninput="this.nextElementSibling.value = this.value" />
+				<output>2</output>
+
+				<h4>Number of Trees</h4>
+				<input type="range" value="1" min="1" max="20" step="1" id="num-trees" oninput="this.nextElementSibling.value = this.value" />
+				<output>1</output>
+		  </div>
+		  <button id="redraw">Update Graph</button>
+		  <input type="checkbox" id="inverse-relations">Add Inverse?</input>
         </div>
         <div class="form-part form-part-2">
-          <h3>Form Part 2</h3>
-          <input type="range" min="0" max="100" />
-          <input type="range" min="0" max="100" />
+          <h3>MLP Model Parameters</h3>
+		  <h4>Hidden Size</h3>
+          <input type="number" value="1024" min="0" id="hidden-size" />
+
+		  <h4>Num Hidden Layers</h4>
+		  <input type="range" value="1" min="0" max="5" id="n-layers" oninput="this.nextElementSibling.value = this.value"/>
+		  <output>1</output>
+
+		  <h4>L2 Regularization</h4>
+		  <input type="range" value="0.01" min="0" max="1" step="0.01" id="l2-regularization" oninput="this.nextElementSibling.value = this.value"/>
+		  <output>0.01</output>
+
+		  <h4>Dropout</h4>
+		  <input type="range" value="0" min="0" max="1" step="0.01" id="dropout" oninput="this.nextElementSibling.value = this.value" />
+		  <output>0</output>
         </div>
         <div class="form-part form-part-3">
           <button id="submit">Submit</button>
-        </div>
+		  <div id="bar-container" class="training-bar"></div>
+<script>
+    console.log('called ldBar')
+</script>
+		</div>
       </div>
       <div class="right-section">
         <div class="visualization-section" id="vis-container">

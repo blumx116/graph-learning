@@ -6,6 +6,13 @@ const LAYOUT = {
   name: "cose",
   componentSpacing: 40,
 };
+const PROB_COLOR_MAP: [number, string][] = [
+  [0.2, "red"],
+  [0.4, "orange"],
+  [0.6, "yellow"],
+  [0.8, "yellowgreen"],
+  [1.0, "green"],
+];
 
 interface CytoScapeNode {
   data: {
@@ -100,7 +107,7 @@ export function graphToCytoScapeStyle(graph: Graph): any[] {
       },
     },
     {
-      selector: "edge[?isTrain]",
+      selector: "edge[!isTrain]",
       style: {
         "line-style": "dashed",
       },
@@ -116,11 +123,54 @@ export function graphToCytoScapeStyle(graph: Graph): any[] {
   ];
 }
 
-function drawGraph(graph: Graph, container: HTMLElement): cytoscape.Core {
+function probToColor(prob: number): string {
+  for (const [threshold, color] of PROB_COLOR_MAP) {
+    if (prob < threshold) {
+      return color;
+    }
+  }
+  throw Error("TODO: fill in this error message");
+}
+
+export function addTrainTest(cy: cytoscape.Core, trainTestSplit: boolean[]) {
+  console.log({ trainTestSplit });
+  cy.elements("edge").forEach((elem, i) => {
+    elem.data({ ...elem.data(), isTrain: trainTestSplit[i] });
+  });
+}
+
+export function addProbabilities(cy: cytoscape.Core, probs: number[]) {
+  cy.elements("edge").forEach((elem, i) => {
+    elem.data({
+      ...elem.data(),
+      prob: probs[i],
+      probColor: probToColor(probs[i]),
+    });
+    console.log(elem.data());
+  });
+}
+
+export function drawGraph(
+  container: HTMLElement,
+  graph: Graph,
+): cytoscape.Core {
   return cytoscape({
     container: container,
     elements: graphToCytoScapeElements(graph),
     style: graphToCytoScapeStyle(graph),
     layout: LAYOUT,
+  });
+}
+
+export function redrawGraph(cy: cytoscape.Core, graph: Graph): void {
+  cy.elements().remove();
+  cy.add(graphToCytoScapeElements(graph));
+  cy.style(graphToCytoScapeStyle(graph));
+  cy.ready(function () {
+    var layout = cy.layout({
+      name: "cose",
+      componentSpacing: 40,
+    });
+    layout.run();
   });
 }
