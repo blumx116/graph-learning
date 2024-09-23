@@ -127,12 +127,12 @@ export async function trainModel(
   }
 }
 
-interface DataSet {
+export interface DataSet {
   xs: tf.Tensor;
   ys: tf.Tensor;
 }
 
-interface TrainTestDataset {
+export interface TrainTestDataset {
   train: DataSet;
   test: DataSet;
   split_idxs: boolean[];

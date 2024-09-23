@@ -149,6 +149,22 @@ export function addInverseRelation(
   return graph;
 }
 
+export function duplicateRelation(
+  graph: Graph,
+  originalRelation: string,
+  newRelation: string,
+): Graph {
+  const edgesToDuplicate: Edge[] = Array.from(graph.edges).filter(
+    (edge) => edge.relation == originalRelation,
+  );
+
+  for (const edge of edgesToDuplicate) {
+    graph.edges.add(new Edge(edge.fromNode, newRelation, edge.toNode));
+  }
+
+  return graph;
+}
+
 export function idx_naming(idx: number): string {
   return idx.toString();
 }
@@ -276,9 +292,11 @@ export function randomForestGraph(
   const base_graph: Graph = new Graph();
   const tree_count: number = sampleFromDistribution(tree_count_probs);
   for (var i = 0; i < tree_count; i++) {
-    base_graph.joinWithRename(
-      randomTreeGraph(child_probs, relation, max_depth, naming_fn),
-    );
+    var treeToAdd: Graph = new Graph();
+    while (treeToAdd.nodes.size <= 1) {
+      treeToAdd = randomTreeGraph(child_probs, relation, max_depth, naming_fn);
+    }
+    base_graph.joinWithRename(treeToAdd);
   }
   return base_graph;
 }

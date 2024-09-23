@@ -5,6 +5,7 @@ import {
   addInverseRelation,
   graphFromPredicates,
   randomForestGraph,
+  duplicateRelation,
 } from "./graph.ts";
 import { default as cytoscape } from "cytoscape";
 import {
@@ -110,12 +111,24 @@ function parseGraph(): Graph {
   const shouldAddInverseRelations: boolean =
     document.querySelector<HTMLInputElement>("#inverse-relations")!.checked;
 
+  const shouldDuplicateFirstRelations: boolean =
+    document.querySelector<HTMLInputElement>(
+      "#duplicate-first-relation",
+    )!.checked;
+
   if (shouldAddInverseRelations) {
     // TODO: this just takes the first relation and inverts it
     // that should be controllable by the user
     const relationToInvert: string = Array.from(graph.relationTypes())[0];
     const invertedRelation: string = relationToInvert == ">" ? "<" : ">";
     addInverseRelation(graph, relationToInvert, invertedRelation);
+  }
+
+  if (shouldDuplicateFirstRelations) {
+    const relationToDuplicate: string = Array.from(graph.relationTypes())[0];
+    const duplicatedRelation: string =
+      relationToDuplicate + relationToDuplicate;
+    duplicateRelation(graph, relationToDuplicate, duplicatedRelation);
   }
 
   return graph;
